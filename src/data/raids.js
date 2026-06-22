@@ -39,8 +39,33 @@ export const RAIDS = [
     name: '에키드나',
     tier: 4,
     gates: [
-      { id: 'g1', name: '1관문', hpPhases: [], timePhases: [] },
-      { id: 'g2', name: '2관문', hpPhases: [], timePhases: [] },
+      {
+        id: 'g1',
+        name: '1관문',
+        hpPhases: [
+          { at: 160, label: '꽃 기믹' },
+          { at: 120, label: '2페이즈 전환' },
+          { at: 80,  label: '즉사 기믹' },
+        ],
+        timePhases: [
+          { at: 480, repeat: null,  label: '쫄 소환' },
+          { at: 300, repeat: 120,   label: '독장판 패턴' },
+        ],
+      },
+      {
+        id: 'g2',
+        name: '2관문',
+        hpPhases: [
+          { at: 200, label: '1페이즈 기믹' },
+          { at: 160, label: '2페이즈 전환' },
+          { at: 100, label: '즉사 패턴' },
+          { at: 60,  label: '광폭화 직전' },
+        ],
+        timePhases: [
+          { at: 540, repeat: null, label: '영역 기믹' },
+          { at: 240, repeat: 60,   label: '반복 패턴' },
+        ],
+      },
     ],
   },
   {

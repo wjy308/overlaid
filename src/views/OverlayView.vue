@@ -116,9 +116,59 @@
         <RaidSelector />
       </section>
 
-      <!-- Step 5: 플로팅 오버레이 -->
+      <!-- Step 5: 공략 로직 테스트 -->
+      <section class="card">
+        <h3>
+          5. 공략 미리보기
+          <span class="badge-optional">테스트</span>
+        </h3>
+        <p class="hint">
+          HP · 타이머 값을 직접 입력해서 공략 표시 로직을 확인하세요.<br>
+          게임 없이도 페이즈 하이라이트가 올바른지 검증할 수 있어요.
+        </p>
+
+        <div class="preview-inputs">
+          <label class="preview-input-group">
+            <span>HP (줄)</span>
+            <input
+              class="preview-input"
+              type="number"
+              placeholder="예: 150"
+              v-model.number="previewHp"
+              min="0"
+            />
+          </label>
+          <label class="preview-input-group">
+            <span>타이머 (초)</span>
+            <input
+              class="preview-input"
+              type="number"
+              placeholder="예: 480"
+              v-model.number="previewTimerSecs"
+              min="0"
+            />
+          </label>
+          <button class="btn btn--ghost btn--sm" @click="previewHp = null; previewTimerSecs = null">
+            초기화
+          </button>
+        </div>
+
+        <div class="preview-widget">
+          <OverlayWidget
+            :detectedNumber="previewHp"
+            :isHpReady="true"
+            :isDetecting="previewHp !== null"
+            :detectedSeconds="previewTimerSecs"
+            :detectedTimeStr="previewTimeStr"
+            :isTimerReady="true"
+            :isTimerDetecting="previewTimerSecs !== null"
+          />
+        </div>
+      </section>
+
+      <!-- Step 6: 플로팅 오버레이 -->
       <section class="card" :class="{ 'card--disabled': !isDetecting }">
-        <h3>5. 플로팅 오버레이</h3>
+        <h3>6. 플로팅 오버레이</h3>
         <p v-if="!pip.isSupported" class="error">
           Document PiP 미지원 — Chrome 116+ 를 사용하세요.
         </p>
@@ -138,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, watch, nextTick, onMounted, computed } from 'vue'
 import { createApp, h } from 'vue'
 import { useScreenCapture } from '../composables/useScreenCapture.js'
 import { useOcrDetector } from '../composables/useOcrDetector.js'
@@ -173,6 +223,19 @@ const hpSelectorRef    = ref(null)
 const timerSelectorRef = ref(null)
 const savedRegion      = ref(null)
 const savedTimerRegion = ref(null)
+
+// ── 공략 미리보기 테스트용 ────────────────────────────
+const previewHp         = ref(null)
+const previewTimerSecs  = ref(null)
+const previewTimeStr    = computed(() =>
+  previewTimerSecs.value !== null ? secsToStr(previewTimerSecs.value) : null
+)
+
+function secsToStr(s) {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}:00`
+}
 
 // ── localStorage 복원 ────────────────────────────────
 onMounted(() => {
@@ -420,4 +483,44 @@ async function openPiP() {
 .btn--danger   { background: #f87171; color: #000; }
 .btn--ghost    { background: transparent; color: #888; border: 1px solid #333; }
 .btn:not(:disabled):hover { opacity: 0.8; }
+
+/* ── 공략 미리보기 ─────────────────────────────────── */
+.preview-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.preview-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: #666;
+}
+
+.preview-input {
+  width: 100px;
+  padding: 0.4rem 0.6rem;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.preview-input:focus { border-color: #4ade80; }
+.preview-input::placeholder { color: #333; }
+
+.preview-widget {
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+  width: 300px;
+  min-height: 200px;
+}
 </style>
