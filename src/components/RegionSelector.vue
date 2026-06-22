@@ -40,11 +40,12 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   video: Object,
   isCapturing: Boolean,
+  initialRegion: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:region'])
@@ -56,6 +57,14 @@ const isDragging = ref(false)
 const hasRegion = ref(false)
 let startX = 0, startY = 0, curX = 0, curY = 0
 let committedRegion = null
+
+// Load saved region from parent (localStorage)
+onMounted(() => {
+  if (props.initialRegion) {
+    committedRegion = { ...props.initialRegion }
+    hasRegion.value = true
+  }
+})
 let rafId = null
 
 function clamp(v) { return Math.max(0, Math.min(1, v)) }

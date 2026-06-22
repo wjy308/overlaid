@@ -2,7 +2,7 @@
   <div class="overlay-view">
     <header class="overlay-view__header">
       <button class="btn btn--ghost" @click="$router.push('/')">← Back</button>
-      <h2>Overlay</h2>
+      <h2>Overlay <span class="game-badge">로스트아크</span></h2>
     </header>
 
     <main class="overlay-view__main">
@@ -12,8 +12,7 @@
         <template v-if="!isCapturing">
           <p class="hint">
             브라우저 제약상 화면 공유 허가가 필요해요.<br>
-            대화상자에서 <strong>화면 전체(모니터)</strong>를 선택하면
-            HP 숫자 위치를 바로 지정할 수 있어요.
+            대화상자에서 <strong>화면 전체(모니터)</strong>를 선택하세요.
           </p>
           <button class="btn btn--primary" @click="startCapture">캡처 시작</button>
         </template>
@@ -24,12 +23,18 @@
         <p v-if="captureError" class="error">{{ captureError }}</p>
       </section>
 
-      <!-- Step 2: Region selection + live OCR -->
+      <!-- Step 2: Region + live OCR -->
       <section class="card" :class="{ 'card--disabled': !isCapturing }">
-        <h3>2. HP 숫자 영역 선택</h3>
-        <p class="hint">
+        <h3>2. HP 숫자 영역</h3>
+
+        <!-- Saved region indicator -->
+        <div v-if="savedRegion" class="region-status">
+          <span class="region-status__ok">✓ 저장된 영역 사용 중</span>
+          <button class="btn btn--ghost btn--sm" @click="resetRegion">영역 재설정</button>
+        </div>
+        <p v-else class="hint">
           캡처 시작 직후 전체화면 모드가 열립니다.
-          게임 화면에서 <strong>HP 숫자가 표시되는 부분만</strong> 드래그로 선택하세요.
+          게임 화면에서 <strong>HP 숫자 (x999 부분)</strong>를 드래그로 선택하세요.
         </p>
 
         <div v-if="!isReady" class="init-banner">
@@ -41,10 +46,10 @@
           ref="regionSelectorRef"
           :video="video"
           :isCapturing="isCapturing"
+          :initialRegion="savedRegion"
           @update:region="onRegionSelected"
         />
 
-        <!-- Live OCR preview -->
         <div v-if="isDetecting" class="live-row">
           <HpBar
             :detectedNumber="detectedNumber"
@@ -73,7 +78,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { createApp, h } from 'vue'
 import { useScreenCapture } from '../composables/useScreenCapture.js'
 import { useOcrDetector } from '../composables/useOcrDetector.js'
@@ -81,23 +86,59 @@ import { useDocumentPiP } from '../composables/useDocumentPiP.js'
 import HpBar from '../components/overlay/HpBar.vue'
 import RegionSelector from '../components/RegionSelector.vue'
 
+const STORAGE_KEY = 'overlaid_region_v1'
+
 const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion, video } = useScreenCapture()
-const { detectedNumber, isDetecting, isReady, initError, region, start: startDetection, stop: stopDetection } = useOcrDetector()
+
+// Lost Ark: HP 앞에 항상 'x' 붙음 → x 이후 숫자만 추출
+const { detectedNumber, isDetecting, isReady, initError, region, start: startDetection, stop: stopDetection } = useOcrDetector({ hpPrefix: 'x' })
+
 const pip = useDocumentPiP()
-
 const regionSelectorRef = ref(null)
+const savedRegion = ref(null)
 
-// Auto-open fullscreen selector when capture starts
-watch(isCapturing, (active) => {
-  if (active) {
-    nextTick(() => setTimeout(() => regionSelectorRef.value?.openFullscreen(), 400))
-  }
+// ── LocalStorage ────────────────────────────────────────
+onMounted(() => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const r = JSON.parse(raw)
+      savedRegion.value = r
+      Object.assign(region, r)
+    }
+  } catch {}
 })
 
+// ── Capture start → auto flow ───────────────────────────
+watch(isCapturing, (active) => {
+  if (!active) return
+  nextTick(() => {
+    setTimeout(() => {
+      if (savedRegion.value) {
+        // Region already known → start detecting immediately
+        startDetection(captureRegion)
+      } else {
+        // First time → open fullscreen selector
+        regionSelectorRef.value?.openFullscreen()
+      }
+    }, 400)
+  })
+})
+
+// ── Handlers ────────────────────────────────────────────
 function onRegionSelected(r) {
   Object.assign(region, r)
+  savedRegion.value = r
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(r))
   stopDetection()
   startDetection(captureRegion)
+}
+
+function resetRegion() {
+  localStorage.removeItem(STORAGE_KEY)
+  savedRegion.value = null
+  stopDetection()
+  nextTick(() => regionSelectorRef.value?.openFullscreen())
 }
 
 function handleStopCapture() {
@@ -106,6 +147,7 @@ function handleStopCapture() {
   stopCapture()
 }
 
+// ── PiP ─────────────────────────────────────────────────
 async function openPiP() {
   const win = await pip.open(200, 100)
   if (!win) return
@@ -143,8 +185,19 @@ async function openPiP() {
   margin: 0 auto;
 }
 
-.overlay-view__header { display: flex; align-items: center; gap: 1rem; }
-.overlay-view__header h2 { margin: 0; }
+.overlay-view__header { display: flex; align-items: center; gap: 0.75rem; }
+.overlay-view__header h2 { margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+
+.game-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: #1e3a5f;
+  color: #60a5fa;
+  padding: 0.2rem 0.5rem;
+  border-radius: 99px;
+  letter-spacing: 0.03em;
+}
+
 .overlay-view__main { display: flex; flex-direction: column; gap: 1rem; }
 
 .card {
@@ -162,6 +215,18 @@ async function openPiP() {
 
 .hint { color: #666; font-size: 0.8rem; margin: 0; line-height: 1.6; }
 .hint strong { color: #aaa; }
+
+.region-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.region-status__ok {
+  font-size: 0.8rem;
+  color: #4ade80;
+}
 
 .init-banner {
   display: flex;
@@ -205,6 +270,7 @@ async function openPiP() {
   font-weight: 600; cursor: pointer; border: none;
   transition: opacity 0.15s; align-self: flex-start;
 }
+.btn--sm { padding: 0.3rem 0.65rem; font-size: 0.75rem; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn--primary  { background: #4ade80; color: #000; }
 .btn--danger   { background: #f87171; color: #000; }
