@@ -39,26 +39,14 @@
         <div class="line-config">
           <label class="line-config__label">
             총 줄 수
-            <div class="line-config__row">
-              <input
-                v-model.number="totalLines"
-                type="number"
-                min="1"
-                placeholder="예: 900"
-                class="input-num"
-              />
-              <button
-                class="btn btn--ghost btn--sm"
-                :disabled="!regionSelected"
-                @click="handleAutoDetect"
-                title="HP 바 구분선을 스캔해서 총 줄 수를 자동 감지합니다"
-              >
-                자동 감지
-              </button>
-            </div>
-            <span v-if="detectedDividers !== null" class="hint">
-              구분선 {{ detectedDividers }}개 감지 → {{ totalLines }}줄로 설정됨
-            </span>
+            <input
+              v-model.number="totalLines"
+              type="number"
+              min="1"
+              placeholder="예: 900"
+              class="input-num"
+            />
+            <span class="hint">게임 공략 또는 보스 정보에서 총 피통 줄 수를 확인하세요</span>
           </label>
         </div>
 
@@ -119,8 +107,8 @@ import RegionSelector from '../components/RegionSelector.vue'
 
 const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion, video } = useScreenCapture()
 const {
-  fillRatio, currentLines, totalLines, detectedDividers,
-  isDetecting, region, start: startDetection, stop: stopDetection, autoDetectTotal,
+  fillRatio, currentLines, totalLines,
+  isDetecting, region, start: startDetection, stop: stopDetection,
 } = useLineDetector()
 const pip = useDocumentPiP()
 
@@ -131,11 +119,6 @@ function onRegionSelected(r) {
   regionSelected.value = true
 }
 
-function handleAutoDetect() {
-  startDetection(captureRegion) // briefly start to enable captureRegion
-  autoDetectTotal()
-  if (!isDetecting.value) stopDetection()
-}
 
 function handleStopCapture() {
   stopDetection()

@@ -1,80 +1,84 @@
 import { ref, reactive, onUnmounted } from 'vue'
 
-// Sample reference color from leftmost pixels and find the rightmost column
-// that still matches — that's the HP fill boundary.
+/**
+ * Detect HP fill ratio from an ImageData.
+ *
+ * Strategy: build a smoothed per-column brightness profile, then compare
+ * the left 10% (should be filled) vs right 10% (should be empty when HP < 100%).
+ * Find the rightmost column that still belongs to the "filled" side.
+ *
+ * Works regardless of HP bar color and handles both bright-on-dark and
+ * dark-on-bright HP bars.
+ */
 function detectFillRatio(imageData) {
   const { width, height, data } = imageData
-  if (width === 0 || height === 0) return 0
+  if (width < 5 || height < 1) return 1
 
-  const midRow = Math.floor(height / 2)
+  // Sample 5 evenly-spaced rows for noise resilience
+  const sampleRows = [0.2, 0.35, 0.5, 0.65, 0.8]
+    .map(f => Math.max(0, Math.min(height - 1, Math.floor(f * height))))
 
-  // Reference color = average of leftmost 3 columns at mid-height
-  const refSamples = Math.min(3, width)
-  let refR = 0, refG = 0, refB = 0
-  for (let x = 0; x < refSamples; x++) {
-    const i = (midRow * width + x) * 4
-    refR += data[i]; refG += data[i + 1]; refB += data[i + 2]
-  }
-  refR /= refSamples; refG /= refSamples; refB /= refSamples
-
-  // Scan right-to-left: find the rightmost column matching the reference color
-  const threshold = 80 // Euclidean RGB distance
-  for (let x = width - 1; x >= 0; x--) {
-    let r = 0, g = 0, b = 0
-    // Average 5 rows around mid-height for noise resistance
-    for (let dy = -2; dy <= 2; dy++) {
-      const row = Math.max(0, Math.min(height - 1, midRow + dy))
-      const i = (row * width + x) * 4
-      r += data[i]; g += data[i + 1]; b += data[i + 2]
-    }
-    r /= 5; g /= 5; b /= 5
-
-    const dist = Math.sqrt((r - refR) ** 2 + (g - refG) ** 2 + (b - refB) ** 2)
-    if (dist < threshold) return (x + 1) / width
-  }
-  return 0
-}
-
-// Count vertical divider marks by finding periodic brightness dips.
-// Returns number of dividers found (segments = dividers + 1 if bordered).
-function countDividers(imageData) {
-  const { width, height, data } = imageData
-  if (width < 10) return 0
-
-  const midRow = Math.floor(height / 2)
-
-  // Build per-column brightness profile (average 3 rows)
+  // Build per-column brightness
   const brightness = new Float32Array(width)
   for (let x = 0; x < width; x++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const row = Math.max(0, Math.min(height - 1, midRow + dy))
+    for (const row of sampleRows) {
       const i = (row * width + x) * 4
       brightness[x] += (data[i] + data[i + 1] + data[i + 2]) / 3
     }
-    brightness[x] /= 3
+    brightness[x] /= sampleRows.length
   }
 
-  const avg = brightness.reduce((s, v) => s + v, 0) / width
-  const darkThreshold = avg * 0.6
-
-  // Count dark valleys (each contiguous dark zone = one divider)
-  let count = 0
-  let inDark = false
+  // Smooth with a window = ~2% of bar width to eliminate narrow dividers
+  const win = Math.max(2, Math.floor(width * 0.02))
+  const smoothed = new Float32Array(width)
   for (let x = 0; x < width; x++) {
-    if (brightness[x] < darkThreshold) {
-      if (!inDark) { count++; inDark = true }
-    } else {
-      inDark = false
+    let sum = 0, count = 0
+    for (let dx = -win; dx <= win; dx++) {
+      const nx = x + dx
+      if (nx >= 0 && nx < width) { sum += brightness[nx]; count++ }
+    }
+    smoothed[x] = sum / count
+  }
+
+  // Reference: average brightness of leftmost 10% vs rightmost 10%
+  const slice = Math.max(1, Math.floor(width * 0.1))
+  let leftAvg = 0, rightAvg = 0
+  for (let i = 0; i < slice; i++) leftAvg += smoothed[i]
+  for (let i = width - slice; i < width; i++) rightAvg += smoothed[i]
+  leftAvg /= slice
+  rightAvg /= slice
+
+  const range = Math.abs(leftAvg - rightAvg)
+
+  // If the bar has no visible transition the HP is at 100% (or 0%)
+  if (range < 12) {
+    return leftAvg > 40 ? 1.0 : 0.0
+  }
+
+  // Threshold sits 40% of the way from the darker side to the brighter side
+  const minSide = Math.min(leftAvg, rightAvg)
+  const threshold = minSide + range * 0.4
+
+  const filledIsBrighter = leftAvg > rightAvg
+
+  if (filledIsBrighter) {
+    for (let x = width - 1; x >= 0; x--) {
+      if (smoothed[x] > threshold) return (x + 1) / width
+    }
+  } else {
+    // Filled portion is the darker one (e.g. dark bar on a light background)
+    for (let x = width - 1; x >= 0; x--) {
+      if (smoothed[x] < threshold) return (x + 1) / width
     }
   }
-  return count
+
+  return 0
 }
 
 export function useLineDetector() {
   const fillRatio = ref(0)
   const currentLines = ref(0)
   const totalLines = ref(0)
-  const detectedDividers = ref(null) // null = not yet scanned
   const isDetecting = ref(false)
 
   const region = reactive({ x: 0, y: 0, w: 1, h: 1 })
@@ -94,16 +98,6 @@ export function useLineDetector() {
     rafId = null
   }
 
-  // One-shot: try to count dividers to auto-fill totalLines
-  function autoDetectTotal() {
-    const imageData = captureRegionFn?.(region.x, region.y, region.w, region.h)
-    if (!imageData) return
-    const d = countDividers(imageData)
-    detectedDividers.value = d
-    // dividers separate segments; border lines at edges aren't "lines" in the game sense
-    if (d > 1) totalLines.value = d - 1
-  }
-
   function tick() {
     if (!isDetecting.value) return
     const imageData = captureRegionFn?.(region.x, region.y, region.w, region.h)
@@ -119,5 +113,5 @@ export function useLineDetector() {
 
   onUnmounted(stop)
 
-  return { fillRatio, currentLines, totalLines, detectedDividers, isDetecting, region, start, stop, autoDetectTotal }
+  return { fillRatio, currentLines, totalLines, isDetecting, region, start, stop }
 }
