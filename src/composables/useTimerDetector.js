@@ -2,31 +2,23 @@ import { ref, reactive, onUnmounted } from 'vue'
 import { createWorker } from 'tesseract.js'
 import { prepareCanvas } from '../utils/canvasPrep.js'
 
-/**
- * @param {object} config
- *   hpPrefix  - character that precedes the HP number (e.g. 'x' for Lost Ark)
- *               When set, only digits AFTER this char are extracted.
- */
-export function useOcrDetector(config = {}) {
-  const { hpPrefix = null } = config
-
-  // Build whitelist: always digits; add prefix char if given
-  const whitelist = '0123456789' + (hpPrefix ? hpPrefix.toLowerCase() + hpPrefix.toUpperCase() : '')
-
-  function parseText(raw) {
-    const text = raw.trim()
-    if (hpPrefix) {
-      // e.g. 'x999' or 'X123' → capture digits after the prefix
-      const match = text.match(new RegExp(`[${hpPrefix}](\\d+)`, 'i'))
-      if (match) return parseInt(match[1], 10)
-      // If prefix not found this frame, skip (reduces noise)
-      return null
-    }
-    const digits = text.replace(/\D/g, '').replace(/^0+(?=\d)/, '')
-    return digits.length > 0 && digits.length <= 7 ? parseInt(digits, 10) : null
+// "09:30:00" → { seconds: 570, str: "09:30:00" } 변환
+// 형식: MM:SS:CS (분:초:센티초) — 세 번째 값은 표시만, 비교는 MM:SS 기준
+function parseTimerText(raw) {
+  const match = raw.match(/(\d{1,2}):(\d{2}):(\d{2})/)
+  if (!match) return null
+  const mins = parseInt(match[1], 10)
+  const secs = parseInt(match[2], 10)
+  if (secs >= 60 || mins > 99) return null
+  return {
+    seconds: mins * 60 + secs,
+    str: `${String(mins).padStart(2, '0')}:${match[2]}:${match[3]}`,
   }
+}
 
-  const detectedNumber = ref(null)
+export function useTimerDetector() {
+  const detectedSeconds = ref(null)  // 총 초 (계산·비교용)
+  const detectedTimeStr = ref(null)  // "9:30" (표시용)
   const isDetecting = ref(false)
   const isReady = ref(false)
   const initError = ref(null)
@@ -41,13 +33,15 @@ export function useOcrDetector(config = {}) {
     try {
       worker = await createWorker('eng')
       await worker.setParameters({
-        tessedit_char_whitelist: whitelist,
-        tessedit_pageseg_mode: '8',
+        // 콜론 포함 — mm:ss 형식 인식
+        tessedit_char_whitelist: '0123456789:',
+        // PSM 7: 단일 텍스트 행 (타이머처럼 짧은 한 줄에 유리)
+        tessedit_pageseg_mode: '7',
         user_defined_dpi: '150',
       })
       isReady.value = true
     } catch (e) {
-      initError.value = `OCR 초기화 실패: ${e.message}`
+      initError.value = `타이머 OCR 초기화 실패: ${e.message}`
     }
   }
 
@@ -63,11 +57,14 @@ export function useOcrDetector(config = {}) {
       const canvas = prepareCanvas(imageData)
       try {
         const { data: { text } } = await worker.recognize(canvas)
-        const num = parseText(text)
-        if (num !== null) detectedNumber.value = num
+        const result = parseTimerText(text)
+        if (result) {
+          detectedSeconds.value = result.seconds
+          detectedTimeStr.value = result.str
+        }
       } catch {}
       busy = false
-    }, 300)
+    }, 500)
   }
 
   function stop() {
@@ -84,5 +81,5 @@ export function useOcrDetector(config = {}) {
     await worker?.terminate()
   })
 
-  return { detectedNumber, isDetecting, isReady, initError, region, start, stop }
+  return { detectedSeconds, detectedTimeStr, isDetecting, isReady, initError, region, start, stop }
 }
