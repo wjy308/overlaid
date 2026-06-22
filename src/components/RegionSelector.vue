@@ -258,6 +258,9 @@ function fsTick() {
   }
 }
 
+// Expose so parent can open fullscreen programmatically
+defineExpose({ openFullscreen: enterFullscreen })
+
 // ESC key handler
 function onKeydown(e) {
   if (e.key === 'Escape' && isFullscreen.value) exitFullscreen()
