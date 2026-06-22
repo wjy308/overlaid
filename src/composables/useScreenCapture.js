@@ -59,5 +59,5 @@ export function useScreenCapture() {
 
   onUnmounted(stopCapture)
 
-  return { isCapturing, error, startCapture, stopCapture, captureRegion }
+  return { isCapturing, error, video, startCapture, stopCapture, captureRegion }
 }

@@ -9,7 +9,7 @@
       <!-- Step 1: Screen capture -->
       <section class="card">
         <h3>1. Screen Capture</h3>
-        <p v-if="!isCapturing" class="hint">Select the window or screen that contains your HP bar.</p>
+        <p v-if="!isCapturing" class="hint">게임 창 또는 화면을 선택하세요.</p>
         <div v-else class="status status--on">Capturing</div>
         <button v-if="!isCapturing" class="btn btn--primary" @click="startCapture">
           Start Capture
@@ -20,43 +20,53 @@
         <p v-if="captureError" class="error">{{ captureError }}</p>
       </section>
 
-      <!-- Step 2: HP region setup -->
+      <!-- Step 2: Region selection -->
       <section class="card" :class="{ 'card--disabled': !isCapturing }">
-        <h3>2. HP Bar Region</h3>
-        <p class="hint">Set normalized coordinates (0–1) for the HP bar region in your captured screen.</p>
-        <div class="region-inputs">
-          <label>X <input v-model.number="region.x" type="number" min="0" max="1" step="0.01" /></label>
-          <label>Y <input v-model.number="region.y" type="number" min="0" max="1" step="0.01" /></label>
-          <label>W <input v-model.number="region.w" type="number" min="0" max="1" step="0.01" /></label>
-          <label>H <input v-model.number="region.h" type="number" min="0" max="1" step="0.01" /></label>
-        </div>
+        <h3>2. HP 바 영역 선택</h3>
+        <p class="hint">드래그로 HP 바 위치를 선택하세요.</p>
 
-        <div class="region-inputs" style="margin-top: 0.75rem">
-          <label>Hue min <input v-model.number="colorConfig.hueMin" type="number" min="0" max="360" /></label>
-          <label>Hue max <input v-model.number="colorConfig.hueMax" type="number" min="0" max="360" /></label>
-        </div>
+        <RegionSelector
+          :video="video"
+          :isCapturing="isCapturing"
+          @update:region="onRegionSelected"
+        />
 
-        <div class="hp-preview">
-          <HpBar :hp="hp" />
-          <span class="hint" style="font-size:0.75rem">Live preview</span>
-        </div>
+        <template v-if="regionSelected">
+          <!-- Color config -->
+          <div class="color-config">
+            <label>
+              Hue min
+              <input v-model.number="colorConfig.hueMin" type="range" min="0" max="360" />
+              <span>{{ colorConfig.hueMin }}°</span>
+            </label>
+            <label>
+              Hue max
+              <input v-model.number="colorConfig.hueMax" type="range" min="0" max="360" />
+              <span>{{ colorConfig.hueMax }}°</span>
+            </label>
+          </div>
 
-        <button
-          class="btn btn--secondary"
-          :disabled="!isCapturing"
-          @click="toggleDetection"
-        >
-          {{ isDetecting ? 'Stop Detection' : 'Start Detection' }}
-        </button>
+          <div class="hp-preview">
+            <HpBar :hp="hp" />
+            <span class="hint" style="font-size:0.75rem">검출 결과 미리보기</span>
+          </div>
+
+          <button
+            class="btn btn--secondary"
+            @click="toggleDetection"
+          >
+            {{ isDetecting ? 'Stop Detection' : 'Start Detection' }}
+          </button>
+        </template>
       </section>
 
       <!-- Step 3: Document PiP -->
       <section class="card" :class="{ 'card--disabled': !isDetecting }">
-        <h3>3. Floating Overlay (Document PiP)</h3>
+        <h3>3. 플로팅 오버레이 (Document PiP)</h3>
         <p v-if="!pip.isSupported" class="error">
-          Document PiP not supported. Use Chrome 116+.
+          Document PiP 미지원 브라우저입니다. Chrome 116+ 를 사용하세요.
         </p>
-        <p v-else class="hint">Opens a floating window that stays on top of your game.</p>
+        <p v-else class="hint">게임 위에 떠있는 창으로 HP 바를 표시합니다.</p>
 
         <button
           v-if="!pip.isOpen.value"
@@ -76,21 +86,30 @@
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { createApp, h } from 'vue'
 import { useScreenCapture } from '../composables/useScreenCapture.js'
 import { useHpDetector } from '../composables/useHpDetector.js'
 import { useDocumentPiP } from '../composables/useDocumentPiP.js'
 import HpBar from '../components/overlay/HpBar.vue'
+import RegionSelector from '../components/RegionSelector.vue'
 
-const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion } = useScreenCapture()
+const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion, video } = useScreenCapture()
 const { hp, isDetecting, region, colorConfig, start: startDetection, stop: stopDetection } = useHpDetector()
 const pip = useDocumentPiP()
+
+const regionSelected = ref(false)
+
+function onRegionSelected(r) {
+  Object.assign(region, r)
+  regionSelected.value = true
+}
 
 function handleStopCapture() {
   stopDetection()
   pip.close()
   stopCapture()
+  regionSelected.value = false
 }
 
 function toggleDetection() {
@@ -110,7 +129,6 @@ async function openPiP() {
   win.document.body.style.margin = '0'
   win.document.body.appendChild(container)
 
-  // Wrap HpBar in a component that reads hp from a shared reactive ref
   const pipApp = createApp({
     setup() {
       return () => h(HpBar, { hp: hp.value })
@@ -119,7 +137,6 @@ async function openPiP() {
 
   pipApp.mount(container)
 
-  // Re-render when hp changes by updating the root component
   watch(hp, () => {
     pipApp._instance?.update()
   })
@@ -133,7 +150,7 @@ async function openPiP() {
   flex-direction: column;
   padding: 1.5rem;
   gap: 1.5rem;
-  max-width: 560px;
+  max-width: 640px;
   margin: 0 auto;
 }
 
@@ -202,29 +219,30 @@ async function openPiP() {
   50% { opacity: 0.3 }
 }
 
-.region-inputs {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.color-config {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
-.region-inputs label {
+.color-config label {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
   color: #888;
 }
 
-.region-inputs input {
-  background: #111;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #eee;
-  padding: 0.25rem 0.4rem;
-  font-size: 0.8rem;
-  width: 100%;
-  box-sizing: border-box;
+.color-config input[type="range"] {
+  flex: 1;
+  accent-color: #4ade80;
+}
+
+.color-config span {
+  width: 2.5rem;
+  text-align: right;
+  font-size: 0.75rem;
+  color: #555;
 }
 
 .hp-preview {
