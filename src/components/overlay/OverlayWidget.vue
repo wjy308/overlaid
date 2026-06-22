@@ -39,7 +39,7 @@
     </div>
 
     <!-- 공략 섹션 -->
-    <div v-if="selectedGate" class="ow__guide">
+    <div v-if="selectedGate" ref="guideRef" class="ow__guide">
       <div class="ow__guide-header">공략</div>
 
       <!-- HP 기반 기믹 -->
@@ -118,7 +118,7 @@
       </div>
     </div>
 
-    <div v-else class="ow__guide">
+    <div v-else ref="guideRef" class="ow__guide">
       <div class="ow__guide-header">공략</div>
       <div class="ow__guide-empty">레이드를 먼저 선택하세요</div>
     </div>
@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useRaidStore } from '../../stores/raidStore.js'
 import RaidSelector from '../RaidSelector.vue'
 
@@ -143,10 +143,22 @@ const props = defineProps({
 
 const { selectedGate, viewMode, setViewMode } = useRaidStore()
 
-// 간단 모드에서 임시로 펼쳐진 페이즈 키 (HP 바뀌면 초기화)
+const guideRef = ref(null)
+
+// 페이즈 판별에 사용하는 안정화된 HP값 — 500ms 디바운스
+// 빠르게 줄이 빠질 때 중간값에서 페이즈가 흔들리는 현상 방지
+const stableHp = ref(props.detectedNumber)
+let hpDebounceTimer = null
+watch(() => props.detectedNumber, (val) => {
+  clearTimeout(hpDebounceTimer)
+  hpDebounceTimer = setTimeout(() => { stableHp.value = val }, 500)
+})
+onUnmounted(() => clearTimeout(hpDebounceTimer))
+
+// 간단 모드에서 임시로 펼쳐진 페이즈 키 (stableHp 바뀌면 초기화)
 const expandedKey = ref(null)
 
-watch(() => props.detectedNumber, () => { expandedKey.value = null })
+watch(stableHp, () => { expandedKey.value = null })
 watch(() => props.detectedSeconds, () => { expandedKey.value = null })
 
 const isTimerLow = computed(() =>
@@ -159,18 +171,22 @@ function secsToStr(s) {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-// ── HP 기반 페이즈 판별 ────────────────────────────
+// ── HP 기반 페이즈 판별 (stableHp 기준) ───────────
 function isHpPassed(phase) {
-  if (props.detectedNumber === null) return false
-  return props.detectedNumber < phase.at
+  if (stableHp.value === null) return false
+  return stableHp.value < phase.at
 }
 
+// 현재 NEXT 페이즈의 at 값 (스크롤 트리거용)
+const nextHpAt = computed(() => {
+  if (!selectedGate.value || stableHp.value === null) return null
+  const upcoming = selectedGate.value.hpPhases.filter(p => stableHp.value >= p.at)
+  if (!upcoming.length) return null
+  return upcoming.reduce((a, b) => b.at > a.at ? b : a).at
+})
+
 function isNextHpPhase(phase) {
-  if (!selectedGate.value || props.detectedNumber === null) return false
-  const upcoming = selectedGate.value.hpPhases.filter(p => props.detectedNumber >= p.at)
-  if (!upcoming.length) return false
-  const next = upcoming.reduce((a, b) => b.at > a.at ? b : a)
-  return next.at === phase.at
+  return nextHpAt.value === phase.at
 }
 
 function hpPhaseClass(phase) {
@@ -178,6 +194,13 @@ function hpPhaseClass(phase) {
   if (isHpPassed(phase))    return 'ow__phase--passed'
   return ''
 }
+
+// NEXT 페이즈가 바뀌면 해당 항목으로 자동 스크롤
+watch(nextHpAt, () => {
+  nextTick(() => {
+    guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+})
 
 // ── 시간 기반 페이즈 판별 ─────────────────────────
 function isTimePassed(phase) {

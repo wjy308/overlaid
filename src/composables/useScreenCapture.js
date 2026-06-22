@@ -11,7 +11,7 @@ export function useScreenCapture() {
     error.value = null
     try {
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'never' },
+        video: { cursor: 'never', displaySurface: 'monitor' },
         audio: false,
       })
 
