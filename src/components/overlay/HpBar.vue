@@ -1,101 +1,46 @@
 <template>
   <div class="hp-bar">
-    <div class="hp-bar__track">
-      <div class="hp-bar__fill" :style="{ width: pct, backgroundColor: fillColor }" />
-    </div>
-    <div class="hp-bar__info">
-      <template v-if="totalLines > 0">
-        <span class="hp-bar__current">{{ currentLines }}</span>
-        <span class="hp-bar__total"> / {{ totalLines }}</span>
-      </template>
-      <template v-else>
-        <span class="hp-bar__pct">{{ Math.round(fillRatio * 100) }}%</span>
-        <span class="hp-bar__scanning">감지중…</span>
-      </template>
-    </div>
+    <span class="hp-bar__number">{{ detectedNumber ?? '—' }}</span>
+    <span class="hp-bar__status">
+      <template v-if="!isReady">초기화 중…</template>
+      <template v-else-if="isDetecting && detectedNumber === null">인식 중…</template>
+      <template v-else-if="isDetecting">HP</template>
+    </span>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-
-const props = defineProps({
-  fillRatio:    { type: Number, default: 1 },
-  currentLines: { type: Number, default: 0 },
-  totalLines:   { type: Number, default: 0 },
-})
-
-const pct = computed(() => `${Math.round(props.fillRatio * 100)}%`)
-
-const fillColor = computed(() => {
-  if (props.fillRatio > 0.6) return '#4ade80'
-  if (props.fillRatio > 0.3) return '#facc15'
-  return '#f87171'
+defineProps({
+  detectedNumber: { type: Number, default: null },
+  isReady:        { type: Boolean, default: false },
+  isDetecting:    { type: Boolean, default: false },
 })
 </script>
 
 <style scoped>
 .hp-bar {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 6px;
-  backdrop-filter: blur(4px);
-  min-width: 220px;
-}
-
-.hp-bar__track {
-  flex: 1;
-  height: 8px;
-  background: #2a2a2a;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.hp-bar__fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.08s linear, background-color 0.3s;
-}
-
-.hp-bar__info {
-  display: flex;
   align-items: baseline;
-  gap: 0.15rem;
-  flex-shrink: 0;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(0, 0, 0, 0.82);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  min-width: 120px;
 }
 
-.hp-bar__current {
-  font-size: 0.9rem;
-  font-weight: 700;
+.hp-bar__number {
+  font-size: 1.6rem;
+  font-weight: 800;
   color: #eee;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
-.hp-bar__total {
+.hp-bar__status {
   font-size: 0.7rem;
   color: #555;
-  font-variant-numeric: tabular-nums;
-}
-
-.hp-bar__pct {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #eee;
-  font-variant-numeric: tabular-nums;
-}
-
-.hp-bar__scanning {
-  font-size: 0.65rem;
-  color: #444;
-  margin-left: 0.25rem;
-  animation: blink 1.2s infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1 }
-  50% { opacity: 0.3 }
+  white-space: nowrap;
 }
 </style>
