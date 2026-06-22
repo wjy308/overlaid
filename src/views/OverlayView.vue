@@ -30,43 +30,66 @@
           :isCapturing="isCapturing"
           @update:region="onRegionSelected"
         />
+      </section>
 
-        <template v-if="regionSelected">
-          <!-- Color config -->
-          <div class="color-config">
-            <label>
-              Hue min
-              <input v-model.number="colorConfig.hueMin" type="range" min="0" max="360" />
-              <span>{{ colorConfig.hueMin }}°</span>
-            </label>
-            <label>
-              Hue max
-              <input v-model.number="colorConfig.hueMax" type="range" min="0" max="360" />
-              <span>{{ colorConfig.hueMax }}°</span>
-            </label>
-          </div>
+      <!-- Step 3: Line count config -->
+      <section class="card" :class="{ 'card--disabled': !regionSelected }">
+        <h3>3. 줄 수 설정</h3>
 
-          <div class="hp-preview">
-            <HpBar :hp="hp" />
-            <span class="hint" style="font-size:0.75rem">검출 결과 미리보기</span>
-          </div>
+        <div class="line-config">
+          <label class="line-config__label">
+            총 줄 수
+            <div class="line-config__row">
+              <input
+                v-model.number="totalLines"
+                type="number"
+                min="1"
+                placeholder="예: 900"
+                class="input-num"
+              />
+              <button
+                class="btn btn--ghost btn--sm"
+                :disabled="!regionSelected"
+                @click="handleAutoDetect"
+                title="HP 바 구분선을 스캔해서 총 줄 수를 자동 감지합니다"
+              >
+                자동 감지
+              </button>
+            </div>
+            <span v-if="detectedDividers !== null" class="hint">
+              구분선 {{ detectedDividers }}개 감지 → {{ totalLines }}줄로 설정됨
+            </span>
+          </label>
+        </div>
 
+        <!-- Detection toggle -->
+        <div class="detect-row">
           <button
             class="btn btn--secondary"
+            :disabled="!regionSelected || totalLines < 1"
             @click="toggleDetection"
           >
             {{ isDetecting ? 'Stop Detection' : 'Start Detection' }}
           </button>
-        </template>
+
+          <!-- Live preview -->
+          <div v-if="isDetecting" class="live-preview">
+            <HpBar
+              :fillRatio="fillRatio"
+              :currentLines="currentLines"
+              :totalLines="totalLines"
+            />
+          </div>
+        </div>
       </section>
 
-      <!-- Step 3: Document PiP -->
+      <!-- Step 4: Document PiP -->
       <section class="card" :class="{ 'card--disabled': !isDetecting }">
-        <h3>3. 플로팅 오버레이 (Document PiP)</h3>
+        <h3>4. 플로팅 오버레이 (Document PiP)</h3>
         <p v-if="!pip.isSupported" class="error">
           Document PiP 미지원 브라우저입니다. Chrome 116+ 를 사용하세요.
         </p>
-        <p v-else class="hint">게임 위에 떠있는 창으로 HP 바를 표시합니다.</p>
+        <p v-else class="hint">게임 위에 떠있는 창으로 현재 줄 수를 표시합니다.</p>
 
         <button
           v-if="!pip.isOpen.value"
@@ -89,13 +112,16 @@
 import { ref, watch } from 'vue'
 import { createApp, h } from 'vue'
 import { useScreenCapture } from '../composables/useScreenCapture.js'
-import { useHpDetector } from '../composables/useHpDetector.js'
+import { useLineDetector } from '../composables/useLineDetector.js'
 import { useDocumentPiP } from '../composables/useDocumentPiP.js'
 import HpBar from '../components/overlay/HpBar.vue'
 import RegionSelector from '../components/RegionSelector.vue'
 
 const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion, video } = useScreenCapture()
-const { hp, isDetecting, region, colorConfig, start: startDetection, stop: stopDetection } = useHpDetector()
+const {
+  fillRatio, currentLines, totalLines, detectedDividers,
+  isDetecting, region, start: startDetection, stop: stopDetection, autoDetectTotal,
+} = useLineDetector()
 const pip = useDocumentPiP()
 
 const regionSelected = ref(false)
@@ -103,6 +129,12 @@ const regionSelected = ref(false)
 function onRegionSelected(r) {
   Object.assign(region, r)
   regionSelected.value = true
+}
+
+function handleAutoDetect() {
+  startDetection(captureRegion) // briefly start to enable captureRegion
+  autoDetectTotal()
+  if (!isDetecting.value) stopDetection()
 }
 
 function handleStopCapture() {
@@ -121,7 +153,7 @@ function toggleDetection() {
 }
 
 async function openPiP() {
-  const win = await pip.open(280, 80)
+  const win = await pip.open(280, 90)
   if (!win) return
 
   const container = win.document.createElement('div')
@@ -131,13 +163,17 @@ async function openPiP() {
 
   const pipApp = createApp({
     setup() {
-      return () => h(HpBar, { hp: hp.value })
+      return () => h(HpBar, {
+        fillRatio: fillRatio.value,
+        currentLines: currentLines.value,
+        totalLines: totalLines.value,
+      })
     },
   })
 
   pipApp.mount(container)
 
-  watch(hp, () => {
+  watch([fillRatio, currentLines], () => {
     pipApp._instance?.update()
   })
 }
@@ -160,9 +196,7 @@ async function openPiP() {
   gap: 1rem;
 }
 
-.overlay-view__header h2 {
-  margin: 0;
-}
+.overlay-view__header h2 { margin: 0; }
 
 .overlay-view__main {
   display: flex;
@@ -219,36 +253,51 @@ async function openPiP() {
   50% { opacity: 0.3 }
 }
 
-.color-config {
+.line-config {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.color-config label {
+.line-config__label {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.4rem;
   font-size: 0.8rem;
   color: #888;
 }
 
-.color-config input[type="range"] {
-  flex: 1;
-  accent-color: #4ade80;
+.line-config__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
-.color-config span {
-  width: 2.5rem;
-  text-align: right;
-  font-size: 0.75rem;
-  color: #555;
+.input-num {
+  width: 100px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #eee;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.875rem;
 }
 
-.hp-preview {
+.input-num:focus {
+  outline: none;
+  border-color: #4ade80;
+}
+
+.detect-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.live-preview {
+  flex: 1;
+  min-width: 0;
 }
 
 .error {
@@ -266,16 +315,18 @@ async function openPiP() {
   border: none;
   transition: opacity 0.15s;
   align-self: flex-start;
+  white-space: nowrap;
 }
 
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.btn--sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
 }
 
-.btn--primary { background: #4ade80; color: #000; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn--primary  { background: #4ade80; color: #000; }
 .btn--secondary { background: #3b82f6; color: #fff; }
-.btn--danger { background: #f87171; color: #000; }
-.btn--ghost { background: transparent; color: #888; border: 1px solid #333; }
+.btn--danger   { background: #f87171; color: #000; }
+.btn--ghost    { background: transparent; color: #888; border: 1px solid #333; }
 .btn:not(:disabled):hover { opacity: 0.8; }
 </style>
