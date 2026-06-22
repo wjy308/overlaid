@@ -39,16 +39,19 @@
       <template v-if="selectedGate.hpPhases.length > 0">
         <div class="ow__section-label">HP 기준</div>
         <ul class="ow__phases">
-          <li
-            v-for="(phase, idx) in selectedGate.hpPhases"
-            :key="'hp-' + idx"
-            class="ow__phase"
-            :class="hpPhaseClass(phase)"
-          >
-            <span class="ow__phase-val">{{ phase.at.toLocaleString() }}</span>
-            <span class="ow__phase-label">{{ phase.label }}</span>
-            <span v-if="isNextHpPhase(phase)" class="ow__phase-next">NEXT</span>
-          </li>
+          <template v-for="(phase, idx) in selectedGate.hpPhases" :key="'hp-' + idx">
+            <li class="ow__phase" :class="hpPhaseClass(phase)">
+              <span class="ow__phase-val">{{ phase.at.toLocaleString() }}</span>
+              <span class="ow__phase-label">{{ phase.label }}</span>
+              <span v-if="isNextHpPhase(phase)" class="ow__phase-next">NEXT</span>
+            </li>
+            <!-- NEXT 페이즈일 때만 단계별 공략 표시 -->
+            <li v-if="isNextHpPhase(phase) && phase.steps?.length" class="ow__steps">
+              <ol>
+                <li v-for="(step, si) in phase.steps" :key="si">{{ step }}</li>
+              </ol>
+            </li>
+          </template>
         </ul>
       </template>
 
@@ -56,19 +59,21 @@
       <template v-if="selectedGate.timePhases.length > 0">
         <div class="ow__section-label">시간 기준</div>
         <ul class="ow__phases">
-          <li
-            v-for="(phase, idx) in selectedGate.timePhases"
-            :key="'t-' + idx"
-            class="ow__phase"
-            :class="timePhaseClass(phase)"
-          >
-            <span class="ow__phase-val">{{ secsToStr(phase.at) }}</span>
-            <span class="ow__phase-label">
-              {{ phase.label }}
-              <span v-if="phase.repeat" class="ow__phase-repeat">↺ {{ phase.repeat }}초</span>
-            </span>
-            <span v-if="isNextTimePhase(phase)" class="ow__phase-next">NEXT</span>
-          </li>
+          <template v-for="(phase, idx) in selectedGate.timePhases" :key="'t-' + idx">
+            <li class="ow__phase" :class="timePhaseClass(phase)">
+              <span class="ow__phase-val">{{ secsToStr(phase.at) }}</span>
+              <span class="ow__phase-label">
+                {{ phase.label }}
+                <span v-if="phase.repeat" class="ow__phase-repeat">↺ {{ phase.repeat }}초</span>
+              </span>
+              <span v-if="isNextTimePhase(phase)" class="ow__phase-next">NEXT</span>
+            </li>
+            <li v-if="isNextTimePhase(phase) && phase.steps?.length" class="ow__steps">
+              <ol>
+                <li v-for="(step, si) in phase.steps" :key="si">{{ step }}</li>
+              </ol>
+            </li>
+          </template>
         </ul>
       </template>
 
@@ -342,5 +347,44 @@ function timePhaseClass(phase) {
   letter-spacing: 0.06em;
   opacity: 0.7;
   flex-shrink: 0;
+}
+
+/* ── 단계별 공략 (NEXT 페이즈 하위) ──────────────── */
+.ow__steps {
+  list-style: none;
+  padding: 0.3rem 0 0.4rem 1rem;
+  margin: 0;
+  border-left: 2px solid rgba(74, 222, 128, 0.2);
+  margin-left: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+
+.ow__steps ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  counter-reset: step-counter;
+}
+
+.ow__steps ol li {
+  display: flex;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: #bbb;
+  line-height: 1.4;
+  counter-increment: step-counter;
+}
+
+.ow__steps ol li::before {
+  content: counter(step-counter) '.';
+  color: #4ade80;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  min-width: 1rem;
+  opacity: 0.7;
 }
 </style>

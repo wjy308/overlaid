@@ -315,7 +315,7 @@ function handleStopCapture() {
 
 // ── PiP 오버레이 ────────────────────────────────────
 async function openPiP() {
-  const win = await pip.open(300, 280)
+  const win = await pip.open(300, 420)
   if (!win) return
 
   win.document.body.style.cssText = 'margin:0;padding:0;background:#0f0f0f;'
