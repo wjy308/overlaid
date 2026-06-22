@@ -4,8 +4,14 @@
       <div class="hp-bar__fill" :style="{ width: pct, backgroundColor: fillColor }" />
     </div>
     <div class="hp-bar__info">
-      <span class="hp-bar__current">{{ currentLines }}</span>
-      <span v-if="totalLines > 0" class="hp-bar__total"> / {{ totalLines }}</span>
+      <template v-if="totalLines > 0">
+        <span class="hp-bar__current">{{ currentLines }}</span>
+        <span class="hp-bar__total"> / {{ totalLines }}</span>
+      </template>
+      <template v-else>
+        <span class="hp-bar__pct">{{ Math.round(fillRatio * 100) }}%</span>
+        <span class="hp-bar__scanning">감지중…</span>
+      </template>
     </div>
   </div>
 </template>
@@ -57,7 +63,7 @@ const fillColor = computed(() => {
 .hp-bar__info {
   display: flex;
   align-items: baseline;
-  gap: 0.1rem;
+  gap: 0.15rem;
   flex-shrink: 0;
 }
 
@@ -72,5 +78,24 @@ const fillColor = computed(() => {
   font-size: 0.7rem;
   color: #555;
   font-variant-numeric: tabular-nums;
+}
+
+.hp-bar__pct {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #eee;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp-bar__scanning {
+  font-size: 0.65rem;
+  color: #444;
+  margin-left: 0.25rem;
+  animation: blink 1.2s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1 }
+  50% { opacity: 0.3 }
 }
 </style>

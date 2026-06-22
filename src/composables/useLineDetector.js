@@ -1,24 +1,16 @@
 import { ref, reactive, onUnmounted } from 'vue'
 
 /**
- * Detect HP fill ratio from an ImageData.
- *
- * Strategy: build a smoothed per-column brightness profile, then compare
- * the left 10% (should be filled) vs right 10% (should be empty when HP < 100%).
- * Find the rightmost column that still belongs to the "filled" side.
- *
- * Works regardless of HP bar color and handles both bright-on-dark and
- * dark-on-bright HP bars.
+ * Fill ratio: compare left-10% vs right-10% brightness to set an adaptive
+ * threshold, then find the rightmost column that's on the "filled" side.
  */
 function detectFillRatio(imageData) {
   const { width, height, data } = imageData
   if (width < 5 || height < 1) return 1
 
-  // Sample 5 evenly-spaced rows for noise resilience
   const sampleRows = [0.2, 0.35, 0.5, 0.65, 0.8]
     .map(f => Math.max(0, Math.min(height - 1, Math.floor(f * height))))
 
-  // Build per-column brightness
   const brightness = new Float32Array(width)
   for (let x = 0; x < width; x++) {
     for (const row of sampleRows) {
@@ -28,7 +20,6 @@ function detectFillRatio(imageData) {
     brightness[x] /= sampleRows.length
   }
 
-  // Smooth with a window = ~2% of bar width to eliminate narrow dividers
   const win = Math.max(2, Math.floor(width * 0.02))
   const smoothed = new Float32Array(width)
   for (let x = 0; x < width; x++) {
@@ -40,7 +31,6 @@ function detectFillRatio(imageData) {
     smoothed[x] = sum / count
   }
 
-  // Reference: average brightness of leftmost 10% vs rightmost 10%
   const slice = Math.max(1, Math.floor(width * 0.1))
   let leftAvg = 0, rightAvg = 0
   for (let i = 0; i < slice; i++) leftAvg += smoothed[i]
@@ -49,46 +39,95 @@ function detectFillRatio(imageData) {
   rightAvg /= slice
 
   const range = Math.abs(leftAvg - rightAvg)
+  if (range < 12) return leftAvg > 40 ? 1.0 : 0.0
 
-  // If the bar has no visible transition the HP is at 100% (or 0%)
-  if (range < 12) {
-    return leftAvg > 40 ? 1.0 : 0.0
-  }
+  const threshold = Math.min(leftAvg, rightAvg) + range * 0.4
 
-  // Threshold sits 40% of the way from the darker side to the brighter side
-  const minSide = Math.min(leftAvg, rightAvg)
-  const threshold = minSide + range * 0.4
-
-  const filledIsBrighter = leftAvg > rightAvg
-
-  if (filledIsBrighter) {
+  if (leftAvg > rightAvg) {
     for (let x = width - 1; x >= 0; x--) {
       if (smoothed[x] > threshold) return (x + 1) / width
     }
   } else {
-    // Filled portion is the darker one (e.g. dark bar on a light background)
     for (let x = width - 1; x >= 0; x--) {
       if (smoothed[x] < threshold) return (x + 1) / width
     }
   }
-
   return 0
+}
+
+/**
+ * Total lines: find the repeating period of divider marks via autocorrelation
+ * on a downsampled brightness profile.
+ * Returns the line count, or null if no clear period is found.
+ */
+function detectTotalLines(imageData) {
+  const { width, height, data } = imageData
+  if (width < 10) return null
+
+  // Downsample horizontally to ≤300 samples for perf
+  const samples = Math.min(width, 300)
+  const step = width / samples
+  const brightness = new Float32Array(samples)
+
+  for (let s = 0; s < samples; s++) {
+    const x = Math.floor(s * step)
+    for (let y = 0; y < height; y++) {
+      const i = (y * width + x) * 4
+      brightness[s] += (data[i] + data[i + 1] + data[i + 2]) / 3
+    }
+    brightness[s] /= height
+  }
+
+  const mean = brightness.reduce((a, b) => a + b, 0) / samples
+  let variance = 0
+  for (let i = 0; i < samples; i++) variance += (brightness[i] - mean) ** 2
+  variance /= samples
+
+  // Not enough brightness variation → no visible dividers
+  if (variance < 5) return null
+
+  const centered = brightness.map(v => v - mean)
+  const maxLag = Math.floor(samples / 3)
+
+  let bestLag = -1
+  let bestCorr = 0.25 // minimum confidence threshold
+
+  for (let lag = 2; lag <= maxLag; lag++) {
+    let corr = 0
+    const n = samples - lag
+    for (let x = 0; x < n; x++) corr += centered[x] * centered[x + lag]
+    corr /= n * variance
+    if (corr > bestCorr) {
+      bestCorr = corr
+      bestLag = lag
+    }
+  }
+
+  if (bestLag < 0) return null
+
+  // Convert lag in downsampled space → actual pixel period → line count
+  const actualPeriod = bestLag * (width / samples)
+  const total = Math.round(width / actualPeriod)
+
+  return total >= 2 && total <= 5000 ? total : null
 }
 
 export function useLineDetector() {
   const fillRatio = ref(0)
   const currentLines = ref(0)
-  const totalLines = ref(0)
+  const totalLines = ref(0)   // 0 = not yet detected
   const isDetecting = ref(false)
 
   const region = reactive({ x: 0, y: 0, w: 1, h: 1 })
 
   let rafId = null
   let captureRegionFn = null
+  let frame = 0
 
   function start(captureRegion) {
     captureRegionFn = captureRegion
     isDetecting.value = true
+    frame = 0
     tick()
   }
 
@@ -101,13 +140,22 @@ export function useLineDetector() {
   function tick() {
     if (!isDetecting.value) return
     const imageData = captureRegionFn?.(region.x, region.y, region.w, region.h)
+
     if (imageData) {
-      const ratio = detectFillRatio(imageData)
-      fillRatio.value = ratio
+      fillRatio.value = detectFillRatio(imageData)
+
       if (totalLines.value > 0) {
-        currentLines.value = Math.round(ratio * totalLines.value)
+        currentLines.value = Math.round(fillRatio.value * totalLines.value)
+      }
+
+      // Attempt total-lines detection every 90 frames until it succeeds
+      if (totalLines.value === 0 && frame % 90 === 0) {
+        const detected = detectTotalLines(imageData)
+        if (detected) totalLines.value = detected
       }
     }
+
+    frame++
     rafId = requestAnimationFrame(tick)
   }
 
