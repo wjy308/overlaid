@@ -1,12 +1,21 @@
 import { reactive, computed, ref } from 'vue'
 import { RAIDS as LOCAL_RAIDS } from '../data/raids.js'
 
-const STORAGE_KEY = 'overlaid_raid_v1'
+const STORAGE_KEY    = 'overlaid_raid_v1'
+const VIEW_MODE_KEY  = 'overlaid_view_mode'
 
 // 로컬 데이터로 먼저 시작 → API 로드 후 업데이트 (폴백 보장)
 const raidsData = ref(LOCAL_RAIDS)
 const isRaidsLoading = ref(false)
 const raidsError = ref(null)
+
+// 'simple' | 'detail' — PiP·메인 앱 공유, localStorage 저장
+const viewMode = ref(localStorage.getItem(VIEW_MODE_KEY) || 'simple')
+
+function setViewMode(mode) {
+  viewMode.value = mode
+  localStorage.setItem(VIEW_MODE_KEY, mode)
+}
 
 // PiP 앱과 메인 앱이 같은 JS 컨텍스트를 공유하므로
 // 모듈 수준 reactive 상태로 두 createApp 인스턴스가 동일한 상태를 공유
@@ -74,5 +83,7 @@ export function useRaidStore() {
     selectedGate,
     selectRaid,
     selectGate,
+    viewMode,
+    setViewMode,
   }
 }

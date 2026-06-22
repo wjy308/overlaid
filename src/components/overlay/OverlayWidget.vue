@@ -1,27 +1,34 @@
 <template>
   <div class="ow">
 
-    <!-- 헤더: 컴팩트 레이드 선택기 -->
+    <!-- 헤더: 레이드 선택 + 뷰 모드 토글 -->
     <header class="ow__header">
       <RaidSelector :compact="true" />
+      <div class="ow__mode-toggle">
+        <button
+          class="ow__mode-btn"
+          :class="{ 'ow__mode-btn--active': viewMode === 'simple' }"
+          @click="setViewMode('simple')"
+        >간단</button>
+        <button
+          class="ow__mode-btn"
+          :class="{ 'ow__mode-btn--active': viewMode === 'detail' }"
+          @click="setViewMode('detail')"
+        >상세</button>
+      </div>
     </header>
 
     <!-- HP + 타이머 수치 -->
     <div class="ow__values">
-      <!-- HP -->
       <div class="ow__value-block">
         <span class="ow__value-label">HP</span>
-        <span class="ow__value-num ow__value-num--hp">
-          {{ detectedNumber ?? '—' }}
-        </span>
+        <span class="ow__value-num ow__value-num--hp">{{ detectedNumber ?? '—' }}</span>
         <span v-if="!isHpReady" class="ow__value-sub">초기화 중…</span>
         <span v-else-if="isDetecting && detectedNumber === null" class="ow__value-sub">인식 중…</span>
       </div>
 
-      <!-- 구분선 (타이머 활성 시) -->
       <div v-if="isTimerDetecting" class="ow__divider" />
 
-      <!-- 타이머 -->
       <div v-if="isTimerDetecting" class="ow__value-block">
         <span class="ow__value-label">광폭화</span>
         <span class="ow__value-num ow__value-num--timer" :class="{ 'ow__value-num--danger': isTimerLow }">
@@ -40,13 +47,26 @@
         <div class="ow__section-label">HP 기준</div>
         <ul class="ow__phases">
           <template v-for="(phase, idx) in selectedGate.hpPhases" :key="'hp-' + idx">
-            <li class="ow__phase" :class="hpPhaseClass(phase)">
+            <!-- 페이즈 행 -->
+            <li
+              class="ow__phase"
+              :class="[hpPhaseClass(phase), hasExpandableSteps(phase, 'hp-' + idx) ? 'ow__phase--expandable' : '']"
+              @click="onPhaseClick(phase, 'hp-' + idx)"
+            >
               <span class="ow__phase-val">{{ phase.at.toLocaleString() }}</span>
               <span class="ow__phase-label">{{ phase.label }}</span>
               <span v-if="isNextHpPhase(phase)" class="ow__phase-next">NEXT</span>
+              <!-- 간단 모드 + steps 있으면 펼치기 아이콘 -->
+              <span
+                v-if="viewMode === 'simple' && isNextHpPhase(phase) && phase.steps?.length"
+                class="ow__phase-expand"
+              >{{ expandedKey === 'hp-' + idx ? '▴' : '▾' }}</span>
             </li>
-            <!-- NEXT 페이즈일 때만 단계별 공략 표시 -->
-            <li v-if="isNextHpPhase(phase) && phase.steps?.length" class="ow__steps">
+            <!-- steps: 상세 모드는 NEXT면 항상, 간단 모드는 클릭 시만 -->
+            <li
+              v-if="shouldShowSteps(phase, 'hp-' + idx, isNextHpPhase(phase))"
+              class="ow__steps"
+            >
               <ol>
                 <li v-for="(step, si) in phase.steps" :key="si">{{ step }}</li>
               </ol>
@@ -60,15 +80,26 @@
         <div class="ow__section-label">시간 기준</div>
         <ul class="ow__phases">
           <template v-for="(phase, idx) in selectedGate.timePhases" :key="'t-' + idx">
-            <li class="ow__phase" :class="timePhaseClass(phase)">
+            <li
+              class="ow__phase"
+              :class="[timePhaseClass(phase), hasExpandableSteps(phase, 't-' + idx) ? 'ow__phase--expandable' : '']"
+              @click="onPhaseClick(phase, 't-' + idx)"
+            >
               <span class="ow__phase-val">{{ secsToStr(phase.at) }}</span>
               <span class="ow__phase-label">
                 {{ phase.label }}
                 <span v-if="phase.repeat" class="ow__phase-repeat">↺ {{ phase.repeat }}초</span>
               </span>
               <span v-if="isNextTimePhase(phase)" class="ow__phase-next">NEXT</span>
+              <span
+                v-if="viewMode === 'simple' && isNextTimePhase(phase) && phase.steps?.length"
+                class="ow__phase-expand"
+              >{{ expandedKey === 't-' + idx ? '▴' : '▾' }}</span>
             </li>
-            <li v-if="isNextTimePhase(phase) && phase.steps?.length" class="ow__steps">
+            <li
+              v-if="shouldShowSteps(phase, 't-' + idx, isNextTimePhase(phase))"
+              class="ow__steps"
+            >
               <ol>
                 <li v-for="(step, si) in phase.steps" :key="si">{{ step }}</li>
               </ol>
@@ -77,7 +108,7 @@
         </ul>
       </template>
 
-      <!-- 둘 다 비어있으면 준비중 표시 -->
+      <!-- 둘 다 비어있으면 준비중 -->
       <div
         v-if="selectedGate.hpPhases.length === 0 && selectedGate.timePhases.length === 0"
         class="ow__guide-pending"
@@ -96,36 +127,39 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRaidStore } from '../../stores/raidStore.js'
 import RaidSelector from '../RaidSelector.vue'
 
 const props = defineProps({
-  detectedNumber:  { type: Number,  default: null },
-  isHpReady:       { type: Boolean, default: false },
-  isDetecting:     { type: Boolean, default: false },
-  detectedSeconds: { type: Number,  default: null },
-  detectedTimeStr: { type: String,  default: null },
-  isTimerReady:    { type: Boolean, default: false },
-  isTimerDetecting:{ type: Boolean, default: false },
+  detectedNumber:   { type: Number,  default: null },
+  isHpReady:        { type: Boolean, default: false },
+  isDetecting:      { type: Boolean, default: false },
+  detectedSeconds:  { type: Number,  default: null },
+  detectedTimeStr:  { type: String,  default: null },
+  isTimerReady:     { type: Boolean, default: false },
+  isTimerDetecting: { type: Boolean, default: false },
 })
 
-const { selectedGate } = useRaidStore()
+const { selectedGate, viewMode, setViewMode } = useRaidStore()
 
-// 남은 시간 3분 이하면 빨간색 경고
+// 간단 모드에서 임시로 펼쳐진 페이즈 키 (HP 바뀌면 초기화)
+const expandedKey = ref(null)
+
+watch(() => props.detectedNumber, () => { expandedKey.value = null })
+watch(() => props.detectedSeconds, () => { expandedKey.value = null })
+
 const isTimerLow = computed(() =>
   props.detectedSeconds !== null && props.detectedSeconds <= 180
 )
 
-// 초 → "m:ss" 문자열
 function secsToStr(s) {
   const m = Math.floor(s / 60)
   const sec = s % 60
-  return `${m}:${String(sec).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-// ── HP 기반 페이즈 판별 ────────────────────────────────
-// HP는 감소 → phase.at 이상이면 아직 도달 전(upcoming), 미만이면 통과
+// ── HP 기반 페이즈 판별 ────────────────────────────
 function isHpPassed(phase) {
   if (props.detectedNumber === null) return false
   return props.detectedNumber < phase.at
@@ -145,8 +179,7 @@ function hpPhaseClass(phase) {
   return ''
 }
 
-// ── 시간 기반 페이즈 판별 ─────────────────────────────
-// 타이머는 카운트다운 → 현재 seconds > phase.at 이면 아직 도달 전
+// ── 시간 기반 페이즈 판별 ─────────────────────────
 function isTimePassed(phase) {
   if (props.detectedSeconds === null) return false
   return props.detectedSeconds < phase.at
@@ -154,7 +187,6 @@ function isTimePassed(phase) {
 
 function isNextTimePhase(phase) {
   if (!selectedGate.value || props.detectedSeconds === null) return false
-  // 아직 지나지 않은 것들 중 at 값이 가장 큰 것 (현재 시간에 가장 가까운 것)
   const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds > p.at)
   if (!upcoming.length) return false
   const next = upcoming.reduce((a, b) => b.at > a.at ? b : a)
@@ -165,6 +197,27 @@ function timePhaseClass(phase) {
   if (isNextTimePhase(phase)) return 'ow__phase--next'
   if (isTimePassed(phase))    return 'ow__phase--passed'
   return ''
+}
+
+// ── steps 표시 여부 ────────────────────────────────
+// 상세 모드: NEXT면 항상
+// 간단 모드: NEXT이고 명시적으로 펼친 경우에만
+function shouldShowSteps(phase, key, isNext) {
+  if (!phase.steps?.length || !isNext) return false
+  if (viewMode.value === 'detail') return true
+  return expandedKey.value === key
+}
+
+function hasExpandableSteps(phase, key) {
+  const isNext = key.startsWith('hp-')
+    ? isNextHpPhase(phase)
+    : isNextTimePhase(phase)
+  return viewMode.value === 'simple' && isNext && phase.steps?.length > 0
+}
+
+function onPhaseClick(phase, key) {
+  if (!hasExpandableSteps(phase, key)) return
+  expandedKey.value = expandedKey.value === key ? null : key
 }
 </script>
 
@@ -180,16 +233,48 @@ function timePhaseClass(phase) {
 
 /* ── 헤더 ─────────────────────────────────────────── */
 .ow__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.6rem 0.75rem 0.5rem;
   border-bottom: 1px solid #1e1e1e;
   flex-shrink: 0;
 }
 
-/* ── 수치 영역 (HP + 타이머) ─────────────────────── */
+/* ── 뷰 모드 토글 ─────────────────────────────────── */
+.ow__mode-toggle {
+  display: flex;
+  gap: 0.15rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 0.15rem;
+  flex-shrink: 0;
+}
+
+.ow__mode-btn {
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  color: #444;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.ow__mode-btn--active {
+  background: #1e1e1e;
+  color: #ccc;
+}
+
+/* ── 수치 영역 ────────────────────────────────────── */
 .ow__values {
   display: flex;
   align-items: center;
-  gap: 0;
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid #1e1e1e;
   flex-shrink: 0;
@@ -301,6 +386,9 @@ function timePhaseClass(phase) {
   transition: background 0.1s;
 }
 
+.ow__phase--expandable { cursor: pointer; }
+.ow__phase--expandable:hover { background: rgba(255,255,255,0.02); }
+
 .ow__phase-val {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -349,7 +437,14 @@ function timePhaseClass(phase) {
   flex-shrink: 0;
 }
 
-/* ── 단계별 공략 (NEXT 페이즈 하위) ──────────────── */
+.ow__phase-expand {
+  font-size: 0.6rem;
+  color: #4ade80;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* ── 단계별 공략 ──────────────────────────────────── */
 .ow__steps {
   list-style: none;
   padding: 0.3rem 0 0.4rem 1rem;
