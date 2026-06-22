@@ -12,7 +12,7 @@
     <p v-else class="rs-full__hint">레이드를 선택하면 오버레이에 공략이 표시됩니다.</p>
     <div class="rs-full__grid">
       <button
-        v-for="raid in RAIDS"
+        v-for="raid in raidsData"
         :key="raid.id"
         class="rs-full__card"
         :class="{ 'rs-full__card--active': state.raidId === raid.id }"
@@ -62,7 +62,7 @@
     <!-- 드롭다운 목록 -->
     <div v-if="open" class="rs-compact__dropdown">
       <button
-        v-for="raid in RAIDS"
+        v-for="raid in raidsData"
         :key="raid.id"
         class="rs-compact__item"
         :class="{ 'rs-compact__item--active': state.raidId === raid.id }"
@@ -83,7 +83,7 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
 })
 
-const { state, selectedRaid, selectRaid, selectGate, RAIDS } = useRaidStore()
+const { state, raidsData, selectedRaid, selectedGate, selectRaid, selectGate } = useRaidStore()
 
 const open = ref(false)
 const rootRef = ref(null)
