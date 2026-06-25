@@ -198,7 +198,7 @@ function hpPhaseClass(phase) {
 // NEXT 페이즈가 바뀌면 해당 항목으로 자동 스크롤
 watch(nextHpAt, () => {
   nextTick(() => {
-    guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
 })
 
