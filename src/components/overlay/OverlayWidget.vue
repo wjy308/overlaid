@@ -208,12 +208,16 @@ function isTimePassed(phase) {
   return props.detectedSeconds < phase.at
 }
 
-function isNextTimePhase(phase) {
-  if (!selectedGate.value || props.detectedSeconds === null) return false
+// 현재 NEXT 시간 페이즈의 at 값 (스크롤 트리거용)
+const nextTimeAt = computed(() => {
+  if (!selectedGate.value || props.detectedSeconds === null) return null
   const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds > p.at)
-  if (!upcoming.length) return false
-  const next = upcoming.reduce((a, b) => b.at > a.at ? b : a)
-  return next.at === phase.at
+  if (!upcoming.length) return null
+  return upcoming.reduce((a, b) => b.at > a.at ? b : a).at
+})
+
+function isNextTimePhase(phase) {
+  return nextTimeAt.value === phase.at
 }
 
 function timePhaseClass(phase) {
@@ -221,6 +225,13 @@ function timePhaseClass(phase) {
   if (isTimePassed(phase))    return 'ow__phase--passed'
   return ''
 }
+
+// NEXT 시간 페이즈가 바뀌면 해당 항목으로 자동 스크롤
+watch(nextTimeAt, () => {
+  nextTick(() => {
+    guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+})
 
 // ── steps 표시 여부 ────────────────────────────────
 // 상세 모드: NEXT면 항상
