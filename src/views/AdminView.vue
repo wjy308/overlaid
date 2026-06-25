@@ -36,10 +36,50 @@
           :class="{ 'admin__raid-item--active': selectedRaidId === raid.id }"
           @click="selectRaid(raid.id)"
         >
-          {{ raid.name }}
+          <span class="admin__raid-name">{{ raid.name }}</span>
           <span class="admin__tier">T{{ raid.tier }}</span>
+          <button
+            class="admin__raid-del"
+            @click.stop="deleteRaid(raid.id)"
+            title="삭제"
+          >✕</button>
         </li>
       </ul>
+
+      <!-- 새 레이드 추가 폼 -->
+      <div class="admin__new-raid">
+        <template v-if="!showNewForm">
+          <button class="admin__add-raid-btn" @click="showNewForm = true">+ 레이드 추가</button>
+        </template>
+        <form v-else class="admin__new-form" @submit.prevent="addRaid">
+          <input
+            v-model="newRaid.name"
+            class="admin__input"
+            type="text"
+            placeholder="레이드 이름"
+            autofocus
+            required
+          />
+          <div class="admin__new-row">
+            <select v-model.number="newRaid.tier" class="admin__input admin__input--sm">
+              <option :value="1">T1</option>
+              <option :value="2">T2</option>
+              <option :value="3">T3</option>
+              <option :value="4">T4</option>
+            </select>
+            <select v-model.number="newRaid.gateCount" class="admin__input admin__input--sm">
+              <option :value="1">1관문</option>
+              <option :value="2">2관문</option>
+              <option :value="3">3관문</option>
+              <option :value="4">4관문</option>
+            </select>
+          </div>
+          <div class="admin__new-actions">
+            <button type="submit" class="admin__save-btn">추가</button>
+            <button type="button" class="admin__cancel-btn" @click="showNewForm = false">취소</button>
+          </div>
+        </form>
+      </div>
     </aside>
 
     <!-- 메인 편집 영역 -->
@@ -145,6 +185,9 @@ const selectedGateIdx = ref(0)
 const saving     = ref(false)
 const saveStatus = ref('')  // '' | 'ok' | 'error'
 
+const showNewForm = ref(false)
+const newRaid = ref({ name: '', tier: 3, gateCount: 1 })
+
 const selectedRaid = computed(() => raids.value.find(r => r.id === selectedRaidId.value) ?? null)
 const selectedGate = computed(() => selectedRaid.value?.gates[selectedGateIdx.value] ?? null)
 
@@ -211,6 +254,29 @@ async function loadRaids() {
 function selectRaid(id) {
   selectedRaidId.value = id
   selectedGateIdx.value = 0
+}
+
+// ── 레이드 추가 / 삭제 ────────────────────────────
+function addRaid() {
+  const { name, tier, gateCount } = newRaid.value
+  if (!name.trim()) return
+  const id = 'raid_' + Date.now()
+  const gates = Array.from({ length: gateCount }, (_, i) => ({
+    id: `${id}_g${i + 1}`,
+    name: `${i + 1}관문`,
+    hpPhases: [],
+  }))
+  raids.value.push({ id, name: name.trim(), tier, gates })
+  showNewForm.value = false
+  newRaid.value = { name: '', tier: 3, gateCount: 1 }
+  selectedRaidId.value = id
+  selectedGateIdx.value = 0
+}
+
+function deleteRaid(id) {
+  if (!confirm('레이드를 삭제할까요?')) return
+  raids.value = raids.value.filter(r => r.id !== id)
+  if (selectedRaidId.value === id) selectedRaidId.value = null
 }
 
 // ── 편집 ──────────────────────────────────────────
@@ -374,10 +440,87 @@ async function save() {
 .admin__raid-item:hover { background: #111; color: #aaa; }
 .admin__raid-item--active { background: #111; color: #4ade80; }
 
+.admin__raid-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin__tier {
   font-size: 0.6rem;
   color: #333;
+  flex-shrink: 0;
 }
+
+.admin__raid-del {
+  background: none;
+  border: none;
+  color: transparent;
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.2rem;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.admin__raid-item:hover .admin__raid-del { color: #333; }
+.admin__raid-del:hover { color: #f87171 !important; }
+
+.admin__new-raid {
+  padding: 0.5rem;
+  border-top: 1px solid #1a1a1a;
+  margin-top: auto;
+}
+
+.admin__add-raid-btn {
+  width: 100%;
+  padding: 0.4rem;
+  background: none;
+  border: 1px dashed #222;
+  border-radius: 6px;
+  color: #444;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.admin__add-raid-btn:hover { border-color: #4ade80; color: #4ade80; }
+
+.admin__new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.admin__new-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.admin__input--sm {
+  width: auto;
+  flex: 1;
+}
+
+.admin__new-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.admin__cancel-btn {
+  flex: 1;
+  padding: 0.35rem;
+  background: none;
+  border: 1px solid #222;
+  border-radius: 6px;
+  color: #444;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.admin__cancel-btn:hover { border-color: #555; color: #888; }
 
 /* ── 메인 영역 ─────────────────────────────────── */
 .admin__main {
