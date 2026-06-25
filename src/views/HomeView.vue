@@ -19,56 +19,14 @@
         </ul>
       </section>
 
-      <button class="btn btn--primary" @click="goToOverlay">
+      <button class="btn btn--primary" @click="$router.push('/overlay')">
         Launch Overlay
       </button>
-
-      <div class="auth">
-        <template v-if="!auth.loading">
-          <div v-if="auth.isAdmin" class="auth__user">
-            <span class="auth__badge">Admin</span>
-            <button class="btn btn--ghost" @click="auth.logout">로그아웃</button>
-          </div>
-          <form v-else class="auth__form" @submit.prevent="handleLogin">
-            <input
-              v-model="password"
-              type="password"
-              class="auth__input"
-              placeholder="관리자 비밀번호"
-              autocomplete="current-password"
-            />
-            <button type="submit" class="btn btn--ghost">로그인</button>
-            <span v-if="errorMsg" class="auth__error">{{ errorMsg }}</span>
-          </form>
-        </template>
-      </div>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/authStore.js'
-
-const router = useRouter()
-const auth = useAuthStore()
-const password = ref('')
-const errorMsg = ref('')
-
-function goToOverlay() {
-  router.push('/overlay')
-}
-
-async function handleLogin() {
-  errorMsg.value = ''
-  try {
-    await auth.login(password.value)
-    password.value = ''
-  } catch (e) {
-    errorMsg.value = e.message
-  }
-}
 </script>
 
 <style scoped>
@@ -82,9 +40,7 @@ async function handleLogin() {
   padding: 2rem;
 }
 
-.home__header {
-  text-align: center;
-}
+.home__header { text-align: center; }
 
 .home__header h1 {
   font-size: 3rem;
@@ -113,11 +69,7 @@ async function handleLogin() {
   padding: 1.25rem 1.5rem;
 }
 
-.card h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  color: #ccc;
-}
+.card h2 { margin: 0 0 0.5rem; font-size: 1rem; color: #ccc; }
 
 .card p, .card li {
   color: #888;
@@ -126,10 +78,7 @@ async function handleLogin() {
   margin: 0;
 }
 
-.card ul {
-  padding-left: 1.25rem;
-  margin: 0;
-}
+.card ul { padding-left: 1.25rem; margin: 0; }
 
 .btn--primary {
   padding: 0.75rem 1.5rem;
@@ -143,71 +92,5 @@ async function handleLogin() {
   transition: opacity 0.15s;
 }
 
-.btn--primary:hover {
-  opacity: 0.85;
-}
-
-.auth {
-  display: flex;
-  justify-content: center;
-}
-
-.auth__user {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.auth__badge {
-  font-size: 0.75rem;
-  background: #4ade80;
-  color: #000;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.auth__form {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.auth__input {
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #ccc;
-  font-size: 0.875rem;
-  padding: 0.4rem 0.75rem;
-  outline: none;
-  width: 180px;
-}
-
-.auth__input:focus {
-  border-color: #555;
-}
-
-.auth__error {
-  font-size: 0.8rem;
-  color: #f87171;
-}
-
-.btn--ghost {
-  background: transparent;
-  border: 1px solid #333;
-  border-radius: 5px;
-  color: #888;
-  font-size: 0.875rem;
-  padding: 0.4rem 0.75rem;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-
-.btn--ghost:hover {
-  border-color: #555;
-  color: #ccc;
-}
+.btn--primary:hover { opacity: 0.85; }
 </style>
