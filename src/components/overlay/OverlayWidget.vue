@@ -211,7 +211,7 @@ function isTimePassed(phase) {
 // 현재 NEXT 시간 페이즈의 at 값 (스크롤 트리거용)
 const nextTimeAt = computed(() => {
   if (!selectedGate.value || props.detectedSeconds === null) return null
-  const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds > p.at)
+  const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds >= p.at)
   if (!upcoming.length) return null
   return upcoming.reduce((a, b) => b.at > a.at ? b : a).at
 })
