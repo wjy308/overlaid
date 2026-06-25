@@ -18,7 +18,7 @@
       </div>
     </header>
 
-    <!-- HP + 타이머 수치 -->
+    <!-- HP 수치 -->
     <div class="ow__values">
       <div class="ow__value-block">
         <span class="ow__value-label">HP</span>
@@ -27,8 +27,8 @@
         <span v-else-if="isDetecting && detectedNumber === null" class="ow__value-sub">인식 중…</span>
       </div>
 
+      <!-- TODO: 광폭화 타이머 — 추후 개발 예정
       <div v-if="isTimerDetecting" class="ow__divider" />
-
       <div v-if="isTimerDetecting" class="ow__value-block">
         <span class="ow__value-label">광폭화</span>
         <span class="ow__value-num ow__value-num--timer" :class="{ 'ow__value-num--danger': isTimerLow }">
@@ -36,6 +36,7 @@
         </span>
         <span v-if="!isTimerReady" class="ow__value-sub">초기화 중…</span>
       </div>
+      -->
     </div>
 
     <!-- 공략 섹션 -->
@@ -75,7 +76,7 @@
         </ul>
       </template>
 
-      <!-- 시간 기반 기믹 -->
+      <!-- TODO: 시간 기반 기믹 — 추후 개발 예정
       <template v-if="selectedGate.timePhases.length > 0">
         <div class="ow__section-label">시간 기준</div>
         <ul class="ow__phases">
@@ -107,10 +108,11 @@
           </template>
         </ul>
       </template>
+      -->
 
-      <!-- 둘 다 비어있으면 준비중 -->
+      <!-- HP 기믹만 없으면 준비중 -->
       <div
-        v-if="selectedGate.hpPhases.length === 0 && selectedGate.timePhases.length === 0"
+        v-if="selectedGate.hpPhases.length === 0"
         class="ow__guide-pending"
       >
         <span class="ow__pending-dot" />
@@ -132,13 +134,14 @@ import { useRaidStore } from '../../stores/raidStore.js'
 import RaidSelector from '../RaidSelector.vue'
 
 const props = defineProps({
-  detectedNumber:   { type: Number,  default: null },
-  isHpReady:        { type: Boolean, default: false },
-  isDetecting:      { type: Boolean, default: false },
-  detectedSeconds:  { type: Number,  default: null },
-  detectedTimeStr:  { type: String,  default: null },
-  isTimerReady:     { type: Boolean, default: false },
-  isTimerDetecting: { type: Boolean, default: false },
+  detectedNumber: { type: Number,  default: null },
+  isHpReady:      { type: Boolean, default: false },
+  isDetecting:    { type: Boolean, default: false },
+  // TODO: 광폭화 타이머 — 추후 개발 예정
+  // detectedSeconds:  { type: Number,  default: null },
+  // detectedTimeStr:  { type: String,  default: null },
+  // isTimerReady:     { type: Boolean, default: false },
+  // isTimerDetecting: { type: Boolean, default: false },
 })
 
 const { selectedGate, viewMode, setViewMode } = useRaidStore()
@@ -159,11 +162,12 @@ onUnmounted(() => clearTimeout(hpDebounceTimer))
 const expandedKey = ref(null)
 
 watch(stableHp, () => { expandedKey.value = null })
-watch(() => props.detectedSeconds, () => { expandedKey.value = null })
+// watch(() => props.detectedSeconds, () => { expandedKey.value = null })  // TODO: 타이머 개발 시 복구
 
-const isTimerLow = computed(() =>
-  props.detectedSeconds !== null && props.detectedSeconds <= 180
-)
+// TODO: 광폭화 타이머 — 추후 개발 예정
+// const isTimerLow = computed(() =>
+//   props.detectedSeconds !== null && props.detectedSeconds <= 180
+// )
 
 function secsToStr(s) {
   const m = Math.floor(s / 60)
@@ -202,36 +206,28 @@ watch(nextHpAt, () => {
   })
 })
 
-// ── 시간 기반 페이즈 판별 ─────────────────────────
-function isTimePassed(phase) {
-  if (props.detectedSeconds === null) return false
-  return props.detectedSeconds < phase.at
-}
-
-// 현재 NEXT 시간 페이즈의 at 값 (스크롤 트리거용)
-const nextTimeAt = computed(() => {
-  if (!selectedGate.value || props.detectedSeconds === null) return null
-  const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds >= p.at)
-  if (!upcoming.length) return null
-  return upcoming.reduce((a, b) => b.at > a.at ? b : a).at
-})
-
-function isNextTimePhase(phase) {
-  return nextTimeAt.value === phase.at
-}
-
-function timePhaseClass(phase) {
-  if (isNextTimePhase(phase)) return 'ow__phase--next'
-  if (isTimePassed(phase))    return 'ow__phase--passed'
-  return ''
-}
-
-// NEXT 시간 페이즈가 바뀌면 해당 항목으로 자동 스크롤
-watch(nextTimeAt, () => {
-  nextTick(() => {
-    guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  })
-})
+// TODO: 시간 기반 페이즈 판별 — 추후 개발 예정
+// function isTimePassed(phase) {
+//   if (props.detectedSeconds === null) return false
+//   return props.detectedSeconds < phase.at
+// }
+// const nextTimeAt = computed(() => {
+//   if (!selectedGate.value || props.detectedSeconds === null) return null
+//   const upcoming = selectedGate.value.timePhases.filter(p => props.detectedSeconds >= p.at)
+//   if (!upcoming.length) return null
+//   return upcoming.reduce((a, b) => b.at > a.at ? b : a).at
+// })
+// function isNextTimePhase(phase) { return nextTimeAt.value === phase.at }
+// function timePhaseClass(phase) {
+//   if (isNextTimePhase(phase)) return 'ow__phase--next'
+//   if (isTimePassed(phase))    return 'ow__phase--passed'
+//   return ''
+// }
+// watch(nextTimeAt, () => {
+//   nextTick(() => {
+//     guideRef.value?.querySelector('.ow__phase--next')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+//   })
+// })
 
 // ── steps 표시 여부 ────────────────────────────────
 // 상세 모드: NEXT면 항상
@@ -243,10 +239,7 @@ function shouldShowSteps(phase, key, isNext) {
 }
 
 function hasExpandableSteps(phase, key) {
-  const isNext = key.startsWith('hp-')
-    ? isNextHpPhase(phase)
-    : isNextTimePhase(phase)
-  return viewMode.value === 'simple' && isNext && phase.steps?.length > 0
+  return viewMode.value === 'simple' && isNextHpPhase(phase) && phase.steps?.length > 0
 }
 
 function onPhaseClick(phase, key) {

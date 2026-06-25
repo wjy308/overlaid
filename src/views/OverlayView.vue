@@ -59,52 +59,36 @@
         </div>
       </section>
 
-      <!-- Step 3: 광폭화 타이머 영역 (선택사항) -->
+      <!-- TODO: Step 3: 광폭화 타이머 영역 — 추후 개발 예정
       <section class="card" :class="{ 'card--disabled': !isCapturing }">
         <h3>
           3. 광폭화 타이머 영역
           <span class="badge-optional">선택사항</span>
         </h3>
-
         <p class="hint">
           보스 HP 바 아래 <strong>mm:ss 형식 타이머</strong>를 선택하면<br>
           시간 기반 기믹도 오버레이에 표시됩니다.
         </p>
-
         <div v-if="savedTimerRegion" class="region-status">
           <span class="region-status__ok">✓ 타이머 영역 설정됨</span>
           <button class="btn btn--ghost btn--sm" @click="resetTimerRegion">재설정</button>
         </div>
-
         <div v-if="!isTimerReady && savedTimerRegion" class="init-banner">
           <span class="spinner" /> 타이머 OCR 초기화 중…
         </div>
         <p v-if="timerInitError" class="error">{{ timerInitError }}</p>
-
         <div class="timer-actions">
-          <button
-            v-if="!savedTimerRegion"
-            class="btn btn--ghost"
-            :disabled="!isCapturing"
-            @click="timerSelectorRef?.openFullscreen()"
-          >
-            타이머 영역 선택
-          </button>
+          <button v-if="!savedTimerRegion" class="btn btn--ghost" :disabled="!isCapturing"
+            @click="timerSelectorRef?.openFullscreen()">타이머 영역 선택</button>
           <div v-if="isTimerDetecting && detectedTimeStr" class="live-timer">
             <span class="live-timer__val">{{ detectedTimeStr }}</span>
             <span class="live-timer__label">광폭화</span>
           </div>
         </div>
-
-        <!-- 타이머 영역 선택기 (숨김, fullscreen 전용) -->
-        <RegionSelector
-          ref="timerSelectorRef"
-          :video="video"
-          :isCapturing="isCapturing"
-          :initialRegion="savedTimerRegion"
-          @update:region="onTimerRegionSelected"
-        />
+        <RegionSelector ref="timerSelectorRef" :video="video" :isCapturing="isCapturing"
+          :initialRegion="savedTimerRegion" @update:region="onTimerRegionSelected" />
       </section>
+      -->
 
       <!-- Step 4: 레이드 선택 -->
       <section class="card">
@@ -138,17 +122,7 @@
               min="0"
             />
           </label>
-          <label class="preview-input-group">
-            <span>타이머 (MM:SS)</span>
-            <input
-              class="preview-input"
-              type="text"
-              placeholder="예: 08:00"
-              v-model="previewTimerStr"
-              maxlength="5"
-            />
-          </label>
-          <button class="btn btn--ghost btn--sm" @click="previewHp = null; previewTimerStr = ''">
+          <button class="btn btn--ghost btn--sm" @click="previewHp = null">
             초기화
           </button>
         </div>
@@ -158,10 +132,6 @@
             :detectedNumber="previewHp"
             :isHpReady="true"
             :isDetecting="previewHp !== null"
-            :detectedSeconds="previewTimerSecs"
-            :detectedTimeStr="previewTimeStr"
-            :isTimerReady="true"
-            :isTimerDetecting="previewTimerSecs !== null"
           />
         </div>
       </section>
@@ -188,19 +158,19 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { createApp, h } from 'vue'
 import { useScreenCapture } from '../composables/useScreenCapture.js'
 import { useOcrDetector } from '../composables/useOcrDetector.js'
-import { useTimerDetector } from '../composables/useTimerDetector.js'
+// import { useTimerDetector } from '../composables/useTimerDetector.js'  // TODO: 타이머 개발 시 복구
 import { useDocumentPiP } from '../composables/useDocumentPiP.js'
 import HpBar from '../components/overlay/HpBar.vue'
 import OverlayWidget from '../components/overlay/OverlayWidget.vue'
 import RegionSelector from '../components/RegionSelector.vue'
 import RaidSelector from '../components/RaidSelector.vue'
 
-const HP_REGION_KEY    = 'overlaid_region_v1'
-const TIMER_REGION_KEY = 'overlaid_timer_region_v1'
+const HP_REGION_KEY = 'overlaid_region_v1'
+// const TIMER_REGION_KEY = 'overlaid_timer_region_v1'  // TODO: 타이머 개발 시 복구
 
 const { isCapturing, error: captureError, startCapture, stopCapture, captureRegion, video } = useScreenCapture()
 
@@ -211,37 +181,21 @@ const {
   start: startHpDetection, stop: stopHpDetection,
 } = useOcrDetector({ hpPrefix: 'x' })
 
-// 타이머 OCR (mm:ss 형식)
-const {
-  detectedSeconds, detectedTimeStr, isDetecting: isTimerDetecting,
-  isReady: isTimerReady, initError: timerInitError, region: timerRegion,
-  start: startTimerDetection, stop: stopTimerDetection,
-} = useTimerDetector()
+// TODO: 타이머 OCR — 추후 개발 예정
+// const {
+//   detectedSeconds, detectedTimeStr, isDetecting: isTimerDetecting,
+//   isReady: isTimerReady, initError: timerInitError, region: timerRegion,
+//   start: startTimerDetection, stop: stopTimerDetection,
+// } = useTimerDetector()
 
 const pip = useDocumentPiP()
 const hpSelectorRef    = ref(null)
-const timerSelectorRef = ref(null)
+// const timerSelectorRef = ref(null)  // TODO: 타이머 개발 시 복구
 const savedRegion      = ref(null)
-const savedTimerRegion = ref(null)
+// const savedTimerRegion = ref(null)  // TODO: 타이머 개발 시 복구
 
 // ── 공략 미리보기 테스트용 ────────────────────────────
-const previewHp        = ref(null)
-const previewTimerStr  = ref('')   // "MM:SS" 텍스트 입력
-const previewTimerSecs = computed(() => {
-  const m = previewTimerStr.value.trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!m) return null
-  const secs = parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
-  return isNaN(secs) ? null : secs
-})
-const previewTimeStr   = computed(() =>
-  previewTimerSecs.value !== null ? secsToStr(previewTimerSecs.value) : null
-)
-
-function secsToStr(s) {
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}:00`
-}
+const previewHp = ref(null)
 
 // ── localStorage 복원 ────────────────────────────────
 onMounted(() => {
@@ -254,14 +208,11 @@ onMounted(() => {
     }
   } catch {}
 
-  try {
-    const raw = localStorage.getItem(TIMER_REGION_KEY)
-    if (raw) {
-      const r = JSON.parse(raw)
-      savedTimerRegion.value = r
-      Object.assign(timerRegion, r)
-    }
-  } catch {}
+  // TODO: 타이머 영역 복원 — 추후 개발 예정
+  // try {
+  //   const raw = localStorage.getItem(TIMER_REGION_KEY)
+  //   if (raw) { const r = JSON.parse(raw); savedTimerRegion.value = r; Object.assign(timerRegion, r) }
+  // } catch {}
 })
 
 // ── 캡처 시작 → 자동 흐름 ──────────────────────────
@@ -271,8 +222,7 @@ watch(isCapturing, (active) => {
     setTimeout(() => {
       if (savedRegion.value) {
         startHpDetection(captureRegion)
-        // 타이머 영역도 저장돼 있으면 함께 시작
-        if (savedTimerRegion.value) startTimerDetection(captureRegion)
+        // TODO: if (savedTimerRegion.value) startTimerDetection(captureRegion)
       } else {
         hpSelectorRef.value?.openFullscreen()
       }
@@ -296,25 +246,20 @@ function resetRegion() {
   nextTick(() => hpSelectorRef.value?.openFullscreen())
 }
 
-// ── 타이머 영역 핸들러 ─────────────────────────────
-function onTimerRegionSelected(r) {
-  Object.assign(timerRegion, r)
-  savedTimerRegion.value = r
-  localStorage.setItem(TIMER_REGION_KEY, JSON.stringify(r))
-  stopTimerDetection()
-  startTimerDetection(captureRegion)
-}
-
-function resetTimerRegion() {
-  localStorage.removeItem(TIMER_REGION_KEY)
-  savedTimerRegion.value = null
-  stopTimerDetection()
-}
+// TODO: 타이머 영역 핸들러 — 추후 개발 예정
+// function onTimerRegionSelected(r) {
+//   Object.assign(timerRegion, r); savedTimerRegion.value = r
+//   localStorage.setItem(TIMER_REGION_KEY, JSON.stringify(r))
+//   stopTimerDetection(); startTimerDetection(captureRegion)
+// }
+// function resetTimerRegion() {
+//   localStorage.removeItem(TIMER_REGION_KEY); savedTimerRegion.value = null; stopTimerDetection()
+// }
 
 // ── 전체 중지 ───────────────────────────────────────
 function handleStopCapture() {
   stopHpDetection()
-  stopTimerDetection()
+  // stopTimerDetection()  // TODO: 타이머 개발 시 복구
   pip.close()
   stopCapture()
 }
@@ -331,19 +276,20 @@ async function openPiP() {
   const pipApp = createApp({
     setup() {
       return () => h(OverlayWidget, {
-        detectedNumber:   detectedNumber.value,
-        isHpReady:        isHpReady.value,
-        isDetecting:      isDetecting.value,
-        detectedSeconds:  detectedSeconds.value,
-        detectedTimeStr:  detectedTimeStr.value,
-        isTimerReady:     isTimerReady.value,
-        isTimerDetecting: isTimerDetecting.value,
+        detectedNumber: detectedNumber.value,
+        isHpReady:      isHpReady.value,
+        isDetecting:    isDetecting.value,
+        // TODO: 타이머 props — 추후 개발 예정
+        // detectedSeconds: detectedSeconds.value,
+        // detectedTimeStr: detectedTimeStr.value,
+        // isTimerReady: isTimerReady.value,
+        // isTimerDetecting: isTimerDetecting.value,
       })
     },
   })
   pipApp.mount(container)
 
-  watch([detectedNumber, isDetecting, detectedSeconds, detectedTimeStr, isTimerDetecting], () => {
+  watch([detectedNumber, isDetecting], () => {
     pipApp._instance?.update()
   })
 }
