@@ -11,6 +11,8 @@ const router = createRouter({
   routes: [
     { path: '/', component: HomeView },
     { path: '/overlay', component: OverlayView },
+    // 어드민 — 앱 내 링크 없음, URL 직접 접근 전용
+    { path: '/admin', component: () => import('./views/AdminView.vue') },
   ],
 })
 
