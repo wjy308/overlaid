@@ -139,16 +139,16 @@
             />
           </label>
           <label class="preview-input-group">
-            <span>타이머 (초)</span>
+            <span>타이머 (MM:SS)</span>
             <input
               class="preview-input"
-              type="number"
-              placeholder="예: 480"
-              v-model.number="previewTimerSecs"
-              min="0"
+              type="text"
+              placeholder="예: 08:00"
+              v-model="previewTimerStr"
+              maxlength="5"
             />
           </label>
-          <button class="btn btn--ghost btn--sm" @click="previewHp = null; previewTimerSecs = null">
+          <button class="btn btn--ghost btn--sm" @click="previewHp = null; previewTimerStr = ''">
             초기화
           </button>
         </div>
@@ -225,9 +225,15 @@ const savedRegion      = ref(null)
 const savedTimerRegion = ref(null)
 
 // ── 공략 미리보기 테스트용 ────────────────────────────
-const previewHp         = ref(null)
-const previewTimerSecs  = ref(null)
-const previewTimeStr    = computed(() =>
+const previewHp        = ref(null)
+const previewTimerStr  = ref('')   // "MM:SS" 텍스트 입력
+const previewTimerSecs = computed(() => {
+  const m = previewTimerStr.value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return null
+  const secs = parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
+  return isNaN(secs) ? null : secs
+})
+const previewTimeStr   = computed(() =>
   previewTimerSecs.value !== null ? secsToStr(previewTimerSecs.value) : null
 )
 
